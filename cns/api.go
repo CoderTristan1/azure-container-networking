@@ -207,6 +207,7 @@ type DeleteNetworkRequest struct {
 }
 
 // CreateHnsNetworkRequest describes request to create the HNS network.
+// Note: Networks created via this API are always non-persistent (removed after host reboot).
 type CreateHnsNetworkRequest struct {
 	NetworkName          string
 	NetworkType          string

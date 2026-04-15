@@ -31,6 +31,9 @@ const (
 	// HNS network types
 	hnsL2Bridge = "l2bridge"
 
+	// HNSFlagEnableNonPersistent makes the network non-persistent (removed after host reboot)
+	HNSFlagEnableNonPersistent uint32 = 8
+
 	// hcnSchemaVersionMajor indicates major version number for hcn schema
 	hcnSchemaVersionMajor = 2
 
@@ -127,7 +130,9 @@ func CreateHnsNetwork(nwConfig cns.CreateHnsNetworkRequest) error {
 		hnsNetwork.MacPools = append(hnsNetwork.MacPools, hnsMacPool)
 	}
 
-	return createHnsNetwork(hnsNetwork)
+	// Always create non-persistent networks for ACI scenarios.
+	// Non-persistent networks are removed after host reboot.
+	return createHnsNetwork(hnsNetwork, true)
 }
 
 // DeleteHnsNetwork deletes the HNS network with the provided name
@@ -178,7 +183,7 @@ func CreateDefaultExtNetwork(networkType string) error {
 
 	hnsNetwork.Subnets = append(hnsNetwork.Subnets, hnsSubnet)
 
-	return createHnsNetwork(hnsNetwork)
+	return createHnsNetwork(hnsNetwork, false) // Default ext network is persistent
 }
 
 // DeleteDefaultExtNetwork deletes the default HNS network
@@ -188,14 +193,34 @@ func DeleteDefaultExtNetwork() error {
 	return deleteHnsNetwork(ExtHnsNetworkName)
 }
 
-// createHnsNetwork calls the hcshim to create the hns network
-func createHnsNetwork(hnsNetwork *hcsshim.HNSNetwork) error {
-	// Marshal the request.
-	buffer, err := json.Marshal(hnsNetwork)
-	if err != nil {
-		return err
+// createHnsNetwork calls the hcshim to create the hns network.
+// If nonPersistent is true, the network will be removed after host reboot.
+func createHnsNetwork(hnsNetwork *hcsshim.HNSNetwork, nonPersistent bool) error {
+	var hnsRequest string
+
+	if nonPersistent {
+		// HNS v1 API accepts Flags in the JSON payload even though the Go struct doesn't have it.
+		// We create an anonymous struct to embed the HNSNetwork and add the Flags field.
+		networkWithFlags := struct {
+			*hcsshim.HNSNetwork
+			Flags uint32 `json:"Flags,omitempty"`
+		}{
+			HNSNetwork: hnsNetwork,
+			Flags:      HNSFlagEnableNonPersistent,
+		}
+		buffer, err := json.Marshal(networkWithFlags)
+		if err != nil {
+			return err
+		}
+		hnsRequest = string(buffer)
+		logger.Printf("[Azure CNS] Creating non-persistent HNS network")
+	} else {
+		buffer, err := json.Marshal(hnsNetwork)
+		if err != nil {
+			return err
+		}
+		hnsRequest = string(buffer)
 	}
-	hnsRequest := string(buffer)
 
 	// Create the HNS network.
 	logger.Printf("[Azure CNS] HNSNetworkRequest POST request:%+v", hnsRequest)
