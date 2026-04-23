@@ -6,7 +6,7 @@ PROTOC_ZIP_NAME=protoc-${PROTOBUFF_VERSION}-linux-x86_64.zip
 PROTOC_INSTALL_PATH=$HOME/.local
 REPO_ROOT=$(git rev-parse --show-toplevel)
 
-# install unzip on linux if not installed
+# install unzip on linux if not installede
 if [[ "$OSTYPE" == "linux-gnu" ]]; then
 	if ! type "unzip" > /dev/null; then
 		sudo apt-get install unzip
